@@ -9,6 +9,9 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 import { createDeck } from "@/lib/flashcards";
 import { saveDeck } from "@/lib/storage";
@@ -21,21 +24,29 @@ interface GeneratedCard {
 interface CardPreviewProps {
   title: string;
   sourceText: string;
-
-  /*
-   * CreateDeckPage passes the generated cards through
-   * this prop.
-   */
   initialCards?: GeneratedCard[];
-
-  /*
-   * Also support `cards` for compatibility with older
-   * versions of the component.
-   */
   cards?: GeneratedCard[];
-
   onBack: () => void;
   onSaved: (id: string) => void;
+}
+
+function MathText({
+  children,
+  className = "",
+}: {
+  children: string;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 export function CardPreview({
@@ -46,12 +57,6 @@ export function CardPreview({
   onBack,
   onSaved,
 }: CardPreviewProps) {
-  /*
-   * Never allow cards to become undefined.
-   *
-   * This is the direct fix for:
-   * Cannot read properties of undefined (reading 'length')
-   */
   const incomingCards =
     initialCards ?? cardsProp ?? [];
 
@@ -330,24 +335,26 @@ export function CardPreview({
                   </div>
                 ) : (
                   <>
+                    {/* Question */}
                     <div>
                       <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                         Question
                       </p>
 
-                      <h2 className="text-lg font-bold leading-7 text-[var(--foreground)] sm:text-xl">
+                      <MathText className="prose prose-slate max-w-none text-lg font-bold leading-7 text-[var(--foreground)] sm:text-xl dark:prose-invert">
                         {card.question}
-                      </h2>
+                      </MathText>
                     </div>
 
+                    {/* Answer */}
                     <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
                       <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                         Answer
                       </p>
 
-                      <p className="text-sm leading-7 text-[var(--foreground)]">
+                      <MathText className="prose prose-slate max-w-none text-sm leading-7 text-[var(--foreground)] dark:prose-invert">
                         {card.answer}
-                      </p>
+                      </MathText>
                     </div>
                   </>
                 )}

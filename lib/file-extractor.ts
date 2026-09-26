@@ -1,5 +1,10 @@
 import mammoth from "mammoth";
 import { GoogleGenAI } from "@google/genai";
+
+// IMPORTANT:
+// CanvasFactory must be imported before pdf-parse.
+// PDFParse itself comes from the main package.
+import { CanvasFactory } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 
 const IMAGE_MIME_TYPES = new Set([
@@ -92,6 +97,7 @@ async function extractPdfFile(file: File): Promise<string> {
 
   const parser = new PDFParse({
     data: buffer,
+    CanvasFactory,
   });
 
   try {
