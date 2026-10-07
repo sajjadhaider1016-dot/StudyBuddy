@@ -18,6 +18,7 @@
 
   --border: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(15, 23, 42, 0.13);
+  --line: var(--border-strong);
 
   --primary: #9b713e;
   --primary-dark: #7c592f;
@@ -51,6 +52,7 @@
 
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
+  --line: var(--border-strong);
 
   --primary: #e2d2b8;
   --primary-dark: #e9d9c0;
@@ -163,6 +165,13 @@ button {
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   border-radius: var(--radius-lg);
+}
+
+.card {
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
 }
 
 .soft-card-hover {
