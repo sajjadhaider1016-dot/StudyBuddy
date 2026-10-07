@@ -12,6 +12,26 @@ const FALLBACK_MODEL =
   process.env.GEMINI_FALLBACK_MODEL ||
   "gemini-3.5-flash-lite";
 
+const MAX_CARDS_PER_REQUEST = 25;
+
+function splitSourceForBatches(source: string, batchCount: number): string[] {
+  if (batchCount <= 1) return [source];
+  const parts: string[] = [];
+  let start = 0;
+  for (let index = 0; index < batchCount; index += 1) {
+    const remainingParts = batchCount - index;
+    const target = index === batchCount - 1
+      ? source.length
+      : start + Math.ceil((source.length - start) / remainingParts);
+    let cut = index === batchCount - 1 ? source.length : source.lastIndexOf("\n", target);
+    if (cut <= start || cut < start + Math.floor((target - start) * 0.65)) cut = target;
+    const part = source.slice(start, cut).trim();
+    if (part) parts.push(part);
+    start = cut;
+  }
+  return parts;
+}
+
 export class GeminiTemporaryError extends Error {
   constructor(message: string) {
     super(message);
@@ -302,7 +322,7 @@ export async function generateFlashcards(
   if (
     !Number.isInteger(numberOfCards) ||
     numberOfCards < 1 ||
-    numberOfCards > 50
+    numberOfCards > 200
   ) {
     throw new Error("INVALID_CARD_COUNT");
   }
@@ -311,16 +331,13 @@ export async function generateFlashcards(
     apiKey,
   });
 
-  const prompt = buildPrompt(
-    content,
-    deckTitle,
-    numberOfCards,
-  );
-
   async function callModel(
     model: string,
+    source: string,
+    requestedCards: number,
   ): Promise<GeneratedCard[]> {
     try {
+      const prompt = buildPrompt(source, deckTitle, requestedCards);
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
@@ -360,13 +377,13 @@ export async function generateFlashcards(
         throw new Error("NO_VALID_CARDS");
       }
 
-      if (cards.length < numberOfCards) {
+      if (cards.length < requestedCards) {
         throw new Error(
           "INSUFFICIENT_GENERATED_CARDS",
         );
       }
 
-      return cards.slice(0, numberOfCards);
+      return cards.slice(0, requestedCards);
     } catch (error) {
       if (isQuotaError(error)) {
         throw error;
@@ -382,20 +399,26 @@ export async function generateFlashcards(
     }
   }
 
-  try {
-    return await callModel(PRIMARY_MODEL);
-  } catch (primaryError) {
-    if (isQuotaError(primaryError)) {
-      throw primaryError;
-    }
+  const batchCount = Math.ceil(numberOfCards / MAX_CARDS_PER_REQUEST);
+  const sourceParts = splitSourceForBatches(content, batchCount);
+  const allCards: GeneratedCard[] = [];
+  let remainingCards = numberOfCards;
 
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        `Primary Gemini model failed. Trying fallback model ${FALLBACK_MODEL}.`,
-        getErrorMessage(primaryError),
-      );
+  for (const sourcePart of sourceParts) {
+    const requestedCards = Math.min(MAX_CARDS_PER_REQUEST, remainingCards);
+    try {
+      allCards.push(...await callModel(PRIMARY_MODEL, sourcePart, requestedCards));
+    } catch (primaryError) {
+      if (isQuotaError(primaryError)) throw primaryError;
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`Primary Gemini model failed. Trying fallback model ${FALLBACK_MODEL}.`, getErrorMessage(primaryError));
+      }
+      allCards.push(...await callModel(FALLBACK_MODEL, sourcePart, requestedCards));
     }
-
-    return await callModel(FALLBACK_MODEL);
+    remainingCards -= requestedCards;
   }
+
+  const uniqueCards = normalizeCards(allCards);
+  if (uniqueCards.length < numberOfCards) throw new Error("INSUFFICIENT_GENERATED_CARDS");
+  return uniqueCards.slice(0, numberOfCards);
 }

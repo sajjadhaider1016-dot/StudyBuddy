@@ -3,7 +3,7 @@ import { z } from "zod";
 export const generationRequestSchema = z.object({
   content: z.string().trim().min(20).max(100_000),
   deckTitle: z.string().trim().min(1).max(120),
-  numberOfCards: z.number().int().min(1).max(50),
+  numberOfCards: z.number().int().min(1).max(200),
 });
 
 export const generatedCardsSchema = z.object({

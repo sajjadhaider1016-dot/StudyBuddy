@@ -7,8 +7,12 @@ StudyBuddy is a production-oriented Next.js application for turning user-provide
 ## Features
 
 - Paste notes or upload `.txt` / `.md` study material.
+- Upload PDF books up to 100 MB, choose a page range of up to 100 pages, and create separate decks for each chapter or range. EPUB, DOCX, TXT, and Markdown uploads remain supported.
+- Scanned PDFs use Gemini OCR when `GEMINI_API_KEY` is configured; up to 30 image-only pages are recognized per upload.
+- Search and import downloadable public-domain English books from Project Gutenberg.
 - Server-side Gemini flashcard generation with structured JSON output.
 - Review/edit/delete generated cards before saving.
+- Generate up to 200 cards per deck; larger requests are split into source-based AI batches.
 - One-card-at-a-time study mode with answer reveal.
 - Four self-ratings: Again, Hard, Good, Easy.
 - Basic SM-2-style scheduling with repetition, interval, ease factor and due date.
@@ -16,6 +20,7 @@ StudyBuddy is a production-oriented Next.js application for turning user-provide
 - Dashboard analytics based on real stored data.
 - Due-card study mode and empty states.
 - Search/sort-by-recent deck list.
+- Download and restore complete JSON backups, including study history and theme.
 - Light, dark and system themes.
 - Responsive, keyboard-friendly UI with reduced-motion support.
 - Vercel-ready server API route.

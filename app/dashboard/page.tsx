@@ -5,18 +5,22 @@ import {
   CalendarClock,
   ChevronRight,
   Clock3,
+  Download,
   Layers3,
   Pencil,
   Plus,
   Search,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   deleteDeck,
+  exportData,
   getDecks,
   getSessions,
+  importData,
 } from "@/lib/storage";
 import { isDue } from "@/lib/spaced-repetition";
 import type { Deck } from "@/types";
@@ -24,6 +28,8 @@ import type { Deck } from "@/types";
 export default function Dashboard() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [query, setQuery] = useState("");
+  const [backupMessage, setBackupMessage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -91,11 +97,37 @@ export default function Dashboard() {
     setDecks(getDecks());
   }
 
+  function downloadBackup() {
+    const backup = new Blob([JSON.stringify(exportData(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(backup);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `studybuddy-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setBackupMessage("Backup downloaded.");
+  }
+
+  async function restoreBackup(file?: File) {
+    if (!file) return;
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!confirm("Restore this backup? It will replace the decks and study history saved in this browser.")) return;
+      importData(parsed);
+      setDecks(getDecks());
+      setBackupMessage("Backup restored.");
+    } catch (error) {
+      setBackupMessage(error instanceof Error ? error.message : "Could not read this backup file.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <div>
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold text-indigo-600">
+          <p className="text-sm font-semibold text-[#865a3a]">
             YOUR STUDY SPACE
           </p>
 
@@ -108,14 +140,25 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <Link
-          href="/create"
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white"
-        >
-          <Plus size={17} />
-          Create deck
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={downloadBackup} className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 font-semibold" style={{ borderColor: "var(--line)" }}>
+            <Download size={16} /> Backup
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 font-semibold" style={{ borderColor: "var(--line)" }}>
+            <Upload size={16} /> Restore
+          </button>
+          <input ref={fileInputRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => void restoreBackup(event.target.files?.[0])} />
+          <Link
+            href="/create"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17242c] px-4 py-2.5 font-semibold text-white"
+          >
+            <Plus size={17} />
+            Create deck
+          </Link>
+        </div>
       </div>
+
+      {backupMessage && <p role="status" className="mb-4 text-sm muted">{backupMessage}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
@@ -217,7 +260,7 @@ export default function Dashboard() {
 
                     <Link
                       href={`/study/${deck.id}`}
-                      className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+                      className="rounded-lg p-2 text-[#865a3a] hover:bg-[#f4f1eb] dark:hover:bg-[#865a3a]/10"
                       aria-label={`Study ${deck.title}`}
                     >
                       <ChevronRight size={18} />
@@ -268,7 +311,7 @@ export default function Dashboard() {
           {due > 0 && (
             <Link
               href="/study/today"
-              className="mt-6 block rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white"
+              className="mt-6 block rounded-xl bg-[#17242c] px-4 py-3 text-center text-sm font-semibold text-white"
             >
               Study today
             </Link>
@@ -311,7 +354,7 @@ function Mini({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-indigo-600">
+        <span className="text-[#865a3a]">
           {icon}
         </span>
 

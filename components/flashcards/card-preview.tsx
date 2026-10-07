@@ -379,7 +379,7 @@ export function CardPreview({
         <button
           type="button"
           onClick={saveCurrentDeck}
-          className="gradient-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:-translate-y-0.5 hover:shadow-xl"
+          className="gradient-primary mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#17242c]/10 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           <Save size={18} />
           Save Deck

@@ -11,7 +11,7 @@ export function LandingActions() {
     <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
       <Link
         href="/create"
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-500"
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17242c] px-5 py-3 font-semibold text-white shadow-lg shadow-[#17242c]/10 transition hover:bg-[#30414b]"
       >
         Create Flashcards
         <ArrowRight size={17} />

@@ -1,4 +1,5 @@
 import mammoth from "mammoth";
+import JSZip from "jszip";
 import { GoogleGenAI } from "@google/genai";
 
 // IMPORTANT:
@@ -91,7 +92,73 @@ async function extractDocxFile(file: File): Promise<string> {
   return result.value.trim();
 }
 
-async function extractPdfFile(file: File): Promise<string> {
+const MAX_OCR_PAGES = 30;
+const OCR_BATCH_SIZE = 5;
+
+async function extractScannedPdfPages(
+  parser: PDFParse,
+  pageNumbers: number[],
+): Promise<Map<number, string>> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("PDF_OCR_REQUIRES_API_KEY");
+
+  const ai = new GoogleGenAI({ apiKey });
+  const screenshots = await parser.getScreenshot({
+    partial: pageNumbers,
+    desiredWidth: 1200,
+    imageDataUrl: false,
+  });
+  const extracted = new Map<number, string>();
+  const model = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+
+  for (let index = 0; index < screenshots.pages.length; index += OCR_BATCH_SIZE) {
+    const batch = screenshots.pages.slice(index, index + OCR_BATCH_SIZE);
+    const parts = [
+      { text: "Transcribe the readable study text from these scanned PDF pages in order. Preserve headings, paragraphs, lists, equations, and page order. Do not summarize or add commentary. Start each page with its marker exactly as shown in the accompanying text." },
+      ...batch.flatMap((page) => [
+        { text: `[[PAGE ${page.pageNumber}]]` },
+        { inlineData: { mimeType: "image/png", data: Buffer.from(page.data).toString("base64") } },
+      ]),
+    ];
+    let responseText = "";
+    for (let attempt = 0; attempt <= MAX_IMAGE_RETRIES; attempt += 1) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: [{ role: "user", parts }],
+          config: { temperature: 0.1, maxOutputTokens: 12000 },
+        });
+        responseText = response.text?.trim() ?? "";
+        break;
+      } catch (error) {
+        if (isQuotaError(error) || !isRetryableGeminiError(error) || attempt >= MAX_IMAGE_RETRIES) throw error;
+        await sleep(1000 * 2 ** attempt);
+      }
+    }
+    const pageBlocks = [...responseText.matchAll(/\[\[PAGE\s+(\d+)\]\]([\s\S]*?)(?=\[\[PAGE\s+\d+\]\]|$)/gi)];
+    if (pageBlocks.length) {
+      for (const block of pageBlocks) extracted.set(Number(block[1]), block[2].trim());
+    } else if (responseText && batch[0]) {
+      extracted.set(batch[0].pageNumber, responseText);
+    }
+  }
+  return extracted;
+}
+
+export async function getPdfPageCount(file: File): Promise<number> {
+  const parser = new PDFParse({ data: Buffer.from(await file.arrayBuffer()), CanvasFactory });
+  try {
+    const result = await parser.getText({ first: 1 });
+    return result.total;
+  } finally {
+    await parser.destroy();
+  }
+}
+
+async function extractPdfFile(
+  file: File,
+  pageRange?: { startPage: number; endPage: number },
+): Promise<{ text: string; warning?: string }> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
@@ -101,9 +168,31 @@ async function extractPdfFile(file: File): Promise<string> {
   });
 
   try {
-    const result = await parser.getText();
-
-    return result.text.trim();
+    const selectedPages = pageRange
+      ? Array.from({ length: pageRange.endPage - pageRange.startPage + 1 }, (_, index) => pageRange.startPage + index)
+      : undefined;
+    const result = await parser.getText(selectedPages ? { partial: selectedPages } : undefined);
+    if (pageRange && pageRange.endPage > result.total) {
+      throw new Error(`PDF_PAGE_RANGE_EXCEEDS_TOTAL:${result.total}`);
+    }
+    const pageTexts = new Map(result.pages.map((page) => [page.num, page.text.trim()]));
+    const scannedPages = result.pages.filter((page) => page.text.trim().length < 20);
+    const pagesToOcr = scannedPages.slice(0, MAX_OCR_PAGES).map((page) => page.num);
+    if (pagesToOcr.length) {
+      const ocrText = await extractScannedPdfPages(parser, pagesToOcr);
+      for (const [pageNumber, text] of ocrText) {
+        if (text) pageTexts.set(pageNumber, text);
+      }
+    }
+    const text = result.pages.length
+      ? result.pages.map((page) => pageTexts.get(page.num)).filter(Boolean).join("\n\n").trim()
+      : result.text.trim();
+    return {
+      text,
+      warning: scannedPages.length > MAX_OCR_PAGES
+        ? `Only the first ${MAX_OCR_PAGES} scanned pages were OCR processed. Split the PDF into smaller parts to study the remaining pages.`
+        : undefined,
+    };
   } finally {
     await parser.destroy();
   }
@@ -259,7 +348,8 @@ async function extractImageWithGemini(file: File): Promise<string> {
 
 export async function extractContentFromFile(
   file: File,
-): Promise<string> {
+  pageRange?: { startPage: number; endPage: number },
+): Promise<{ text: string; warning?: string }> {
   const filename = file.name.toLowerCase();
 
   const extension = filename.includes(".")
@@ -271,22 +361,71 @@ export async function extractContentFromFile(
     extension === ".md" ||
     extension === ".markdown"
   ) {
-    return extractTextFile(file);
+    return { text: await extractTextFile(file) };
   }
 
   if (extension === ".docx") {
-    return extractDocxFile(file);
+    return { text: await extractDocxFile(file) };
   }
 
   if (extension === ".pdf") {
-    return extractPdfFile(file);
+    return extractPdfFile(file, pageRange);
+  }
+
+  if (extension === ".epub") {
+    return { text: await extractEpubFile(file) };
   }
 
   if (IMAGE_MIME_TYPES.has(file.type)) {
-    return extractImageWithGemini(file);
+    return { text: await extractImageWithGemini(file) };
   }
 
   throw new Error(
     `UNSUPPORTED_FILE_TYPE: ${file.name}`,
   );
+}
+
+function decodeXmlText(value: string): string {
+  return value.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (entity, code: string) => {
+    if (code[0] === "#") {
+      const hex = code[1]?.toLowerCase() === "x";
+      const point = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+      return Number.isFinite(point) ? String.fromCodePoint(point) : entity;
+    }
+    return ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" } as Record<string, string>)[code.toLowerCase()] ?? entity;
+  });
+}
+
+async function extractEpubFile(file: File): Promise<string> {
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const container = await zip.file("META-INF/container.xml")?.async("text");
+  const packagePath = container?.match(/<rootfile[^>]*full-path=["']([^"']+)["']/i)?.[1];
+  if (!packagePath) throw new Error("This EPUB is missing its book manifest.");
+  const packageXml = await zip.file(packagePath)?.async("text");
+  if (!packageXml) throw new Error("This EPUB book manifest could not be read.");
+  const manifest = new Map<string, string>();
+  for (const item of packageXml.matchAll(/<item\b[^>]*>/gi)) {
+    const id = item[0].match(/\bid=["']([^"']+)["']/i)?.[1];
+    const href = item[0].match(/\bhref=["']([^"']+)["']/i)?.[1];
+    if (id && href) manifest.set(id, href);
+  }
+  const spineIds = [...packageXml.matchAll(/<itemref\b[^>]*\bidref=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
+  const basePath = packagePath.includes("/") ? packagePath.slice(0, packagePath.lastIndexOf("/") + 1) : "";
+  const sections: string[] = [];
+  for (const id of spineIds) {
+    const href = manifest.get(id);
+    if (!href) continue;
+    const pathParts: string[] = [];
+    for (const part of `${basePath}${decodeURIComponent(href.split("#")[0])}`.split("/")) {
+      if (part === "..") pathParts.pop();
+      else if (part && part !== ".") pathParts.push(part);
+    }
+    const entry = zip.file(pathParts.join("/"));
+    if (!entry) continue;
+    const html = await entry.async("text");
+    const text = decodeXmlText(html.replace(/<(script|style|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<\/(p|div|h[1-6]|li|tr|br|section|article)>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+    if (text) sections.push(text);
+  }
+  if (!sections.length) throw new Error("No readable text was found in this EPUB.");
+  return sections.join("\n\n");
 }

@@ -4,6 +4,10 @@ import path from "path";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  experimental: {
+    proxyClientMaxBodySize: "105mb",
+  },
+
   serverExternalPackages: [
     "pdf-parse",
     "@napi-rs/canvas",

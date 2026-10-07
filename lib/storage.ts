@@ -27,3 +27,26 @@ export function saveStudySession(session: StudySession) { const data = read(); d
 export function getSessions(): StudySession[] { return read().sessions; }
 export function getTheme(): StoredData["theme"] { return read().theme; }
 export function setTheme(theme: StoredData["theme"]) { const data = read(); data.theme = theme; write(data); }
+
+export function exportData(): StoredData { return read(); }
+
+export function importData(value: unknown): void {
+  if (!value || typeof value !== "object") throw new Error("This file is not a valid StudyBuddy backup.");
+  const data = value as Partial<StoredData>;
+  if (data.version !== 1 || !Array.isArray(data.decks) || !Array.isArray(data.sessions)) {
+    throw new Error("This backup is invalid or uses an unsupported version.");
+  }
+  const validDecks = data.decks.every((deck) =>
+    deck && typeof deck.id === "string" && typeof deck.title === "string" &&
+    Array.isArray(deck.flashcards) && typeof deck.createdAt === "string" &&
+    deck.flashcards.every((card) => card && typeof card.id === "string" &&
+      typeof card.deckId === "string" && typeof card.question === "string" &&
+      typeof card.answer === "string"),
+  );
+  const validSessions = data.sessions.every((session) => session &&
+    typeof session.id === "string" && typeof session.deckId === "string" &&
+    typeof session.startedAt === "string" && Array.isArray(session.reviews));
+  if (!validDecks || !validSessions) throw new Error("The backup contains invalid deck or session data.");
+  const theme = data.theme === "light" || data.theme === "dark" || data.theme === "system" ? data.theme : "system";
+  write({ version: 1, decks: data.decks, sessions: data.sessions, theme });
+}

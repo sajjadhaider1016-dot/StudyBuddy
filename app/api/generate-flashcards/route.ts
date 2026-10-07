@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "The number of cards must be between 1 and 50.",
+            "The number of cards must be between 1 and 200.",
           retryable: false,
         },
         {

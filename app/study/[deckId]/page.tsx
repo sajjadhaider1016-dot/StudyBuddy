@@ -174,7 +174,7 @@ export default function StudyPage() {
 
         <Link
           href="/dashboard"
-          className="mt-3 inline-block text-indigo-600"
+          className="mt-3 inline-block text-[#865a3a]"
         >
           Back to dashboard
         </Link>
@@ -265,7 +265,7 @@ export default function StudyPage() {
                 refreshedCards,
               );
             }}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#17242c] px-4 py-2.5 font-semibold text-white"
           >
             <RotateCcw size={16} />
             Study Again
@@ -301,7 +301,7 @@ export default function StudyPage() {
 
           <Link
             href="/create"
-            className="rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white"
+            className="rounded-xl bg-[#17242c] px-4 py-2.5 font-semibold text-white"
           >
             Create new flashcards
           </Link>
@@ -333,7 +333,7 @@ export default function StudyPage() {
 
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
           <div
-            className="h-full rounded-full bg-indigo-600 transition-all"
+            className="h-full rounded-full bg-[#17242c] transition-all"
             style={{
               width: `${Math.max(
                 progress,

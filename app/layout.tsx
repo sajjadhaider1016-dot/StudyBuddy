@@ -4,9 +4,9 @@ import { AppShell } from "@/components/ui/app-shell";
 
 export const metadata: Metadata = {
   title:
-    "StudyBuddy — AI-Powered Smart Flashcards",
+    "StudyBuddy — AI Flashcards from Books and Notes",
   description:
-    "Turn your notes into smarter study sessions with AI-powered flashcards and spaced repetition.",
+    "Turn PDF and EPUB books, chapter pages, and notes into editable flashcards with AI and spaced repetition.",
 };
 
 export default function RootLayout({

@@ -162,7 +162,7 @@ export default function EditDeckPage() {
 
         <Link
           href="/dashboard"
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white"
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#17242c] px-4 py-2.5 font-semibold text-white"
         >
           <ArrowLeft size={16} />
           Back to dashboard
@@ -183,7 +183,7 @@ export default function EditDeckPage() {
 
       <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold text-indigo-600">
+          <p className="text-sm font-semibold text-[#865a3a]">
             EDIT DECK
           </p>
 
@@ -199,7 +199,7 @@ export default function EditDeckPage() {
         <button
           type="button"
           onClick={save}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17242c] px-4 py-2.5 font-semibold text-white"
         >
           <Save size={17} />
           Save changes
@@ -264,7 +264,7 @@ export default function EditDeckPage() {
             <button
               type="button"
               onClick={addCard}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#17242c] px-4 py-2.5 text-sm font-semibold text-white"
             >
               <Plus size={16} />
               Add first card

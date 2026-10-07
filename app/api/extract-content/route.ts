@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { extractContentFromFile } from "@/lib/file-extractor";
+import { extractContentFromFile, getPdfPageCount } from "@/lib/file-extractor";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set([
   ".txt",
@@ -11,6 +11,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".markdown",
   ".pdf",
   ".docx",
+  ".epub",
   ".png",
   ".jpg",
   ".jpeg",
@@ -149,7 +150,7 @@ export async function POST(
         {
           error: "FILE_TOO_LARGE",
           message:
-            "File size must be 10 MB or smaller.",
+            "File size must be 100 MB or smaller.",
         },
         { status: 413 },
       );
@@ -168,7 +169,7 @@ export async function POST(
           error:
             "UNSUPPORTED_FILE_TYPE",
           message:
-            "Unsupported file type. Use TXT, Markdown, PDF, DOCX, PNG, JPG, JPEG, WEBP, or GIF.",
+            "Unsupported file type. Use TXT, Markdown, PDF, EPUB, DOCX, PNG, JPG, JPEG, WEBP, or GIF.",
         },
         { status: 415 },
       );
@@ -215,10 +216,35 @@ export async function POST(
       );
     }
 
-    const content =
+    const mode = formData.get("mode");
+    if (mode === "info") {
+      if (extension !== ".pdf") {
+        return Response.json({ error: "PAGE_SELECTION_ONLY_FOR_PDF", message: "Page selection is available for PDF books." }, { status: 400 });
+      }
+      return Response.json({ success: true, filename: file.name, pageCount: await getPdfPageCount(file) });
+    }
+
+    let pageRange: { startPage: number; endPage: number } | undefined;
+    const startValue = formData.get("startPage");
+    const endValue = formData.get("endPage");
+    if (startValue !== null || endValue !== null) {
+      const startPage = Number(startValue);
+      const endPage = Number(endValue);
+      if (extension !== ".pdf" || !Number.isInteger(startPage) || !Number.isInteger(endPage) || startPage < 1 || endPage < startPage) {
+        return Response.json({ error: "INVALID_PAGE_RANGE", message: "Enter a valid PDF page range." }, { status: 400 });
+      }
+      if (endPage - startPage + 1 > 100) {
+        return Response.json({ error: "PAGE_RANGE_TOO_LARGE", message: "Choose up to 100 pages at a time." }, { status: 413 });
+      }
+      pageRange = { startPage, endPage };
+    }
+
+    const extraction =
       await extractContentFromFile(
         file,
+        pageRange,
       );
+    const content = extraction.text;
 
     if (!content.trim()) {
       return Response.json(
@@ -236,6 +262,7 @@ export async function POST(
       success: true,
       filename: file.name,
       content,
+      warning: extraction.warning,
       characterCount:
         content.length,
     });
@@ -273,6 +300,21 @@ export async function POST(
 
     const message =
       getErrorMessage(error);
+
+    const pageRangeError = message.match(/^PDF_PAGE_RANGE_EXCEEDS_TOTAL:(\d+)$/);
+    if (pageRangeError) {
+      return Response.json({ error: "INVALID_PAGE_RANGE", message: `This PDF has ${pageRangeError[1]} pages. Choose a range within the book.` }, { status: 400 });
+    }
+
+    if (message === "PDF_OCR_REQUIRES_API_KEY") {
+      return Response.json(
+        {
+          error: "PDF_OCR_REQUIRES_API_KEY",
+          message: "This PDF appears to be scanned. Add GEMINI_API_KEY in .env.local to enable text recognition, then restart StudyBuddy.",
+        },
+        { status: 503 },
+      );
+    }
 
     return Response.json(
       {
