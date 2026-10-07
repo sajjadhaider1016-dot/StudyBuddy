@@ -1,26 +1,29 @@
 @import "katex/dist/katex.min.css";
 @import "tailwindcss";
-@import "katex/dist/katex.min.css";
+
+@theme inline {
+  --font-sans: "Aptos", "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+}
 
 :root {
-  --background: #f7f8fc;
-  --foreground: #111827;
+  --background: #f5f2eb;
+  --foreground: #202a35;
 
   --card: rgba(255, 255, 255, 0.82);
   --card-solid: #ffffff;
-  --card-foreground: #111827;
+  --card-foreground: #202a35;
 
-  --muted: #667085;
-  --muted-light: #98a2b3;
+  --muted: #59636a;
+  --muted-light: #747b7f;
 
   --border: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(15, 23, 42, 0.13);
 
-  --primary: #635bff;
-  --primary-dark: #5146e5;
-  --primary-soft: rgba(99, 91, 255, 0.1);
+  --primary: #9b713e;
+  --primary-dark: #7c592f;
+  --primary-soft: rgba(155, 113, 62, 0.12);
 
-  --secondary: #8b5cf6;
+  --secondary: #e2d2b8;
   --success: #12b76a;
   --warning: #f79009;
   --danger: #f04438;
@@ -37,23 +40,23 @@
 
 .dark {
   --background: #080b14;
-  --foreground: #f8fafc;
+  --foreground: #f5f4f1;
 
   --card: rgba(17, 24, 39, 0.78);
   --card-solid: #111827;
-  --card-foreground: #f8fafc;
+  --card-foreground: #f5f4f1;
 
-  --muted: #98a2b3;
-  --muted-light: #667085;
+  --muted: #c4cbd0;
+  --muted-light: #aab4ba;
 
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
 
-  --primary: #8178ff;
-  --primary-dark: #7067f5;
-  --primary-soft: rgba(129, 120, 255, 0.14);
+  --primary: #e2d2b8;
+  --primary-dark: #e9d9c0;
+  --primary-soft: rgba(226, 210, 184, 0.16);
 
-  --secondary: #a78bfa;
+  --secondary: #e7dcc9;
 
   --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 12px 35px rgba(0, 0, 0, 0.25);
@@ -71,29 +74,44 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 10% 0%,
-      rgba(99, 91, 255, 0.08),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at 90% 10%,
-      rgba(139, 92, 246, 0.07),
-      transparent 25%
-    ),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
   font-family:
-    Inter,
+    "Aptos",
+    "Segoe UI Variable",
+    "Segoe UI",
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
+    Arial,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-kerning: normal;
+  font-optical-sizing: auto;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Aptos Display", "Aptos", "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1;
+  color: var(--foreground);
+}
+
+h1 {
+  letter-spacing: -0.03em;
+}
+
+h2,
+h3 {
+  letter-spacing: -0.02em;
 }
 
 button,
@@ -108,7 +126,7 @@ button {
 }
 
 ::selection {
-  background: rgba(99, 91, 255, 0.2);
+  background: rgba(23, 107, 91, 0.18);
 }
 
 ::-webkit-scrollbar {
@@ -161,27 +179,15 @@ button {
 }
 
 .gradient-text {
-  background: linear-gradient(
-    135deg,
-    #635bff 0%,
-    #8b5cf6 50%,
-    #a855f7 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #9b713e;
 }
 
 .gradient-primary {
-  background: linear-gradient(
-    135deg,
-    #635bff 0%,
-    #7c3aed 100%
-  );
+  background: #202a35;
 }
 
 .gradient-primary:hover {
-  filter: brightness(1.04);
+  background: #354552;
 }
 
 .focus-ring:focus-visible {
@@ -201,6 +207,22 @@ button {
 
 .animate-scale-in {
   animation: scaleIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.subject-swap {
+  animation: subjectSwap 420ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+
+@keyframes subjectSwap {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fadeIn {
@@ -262,13 +284,7 @@ textarea {
 
 @media (max-width: 640px) {
   body {
-    background:
-      radial-gradient(
-        circle at 50% 0%,
-        rgba(99, 91, 255, 0.08),
-        transparent 35%
-      ),
-      var(--background);
+    background: var(--background);
   }
 
   .soft-card {
@@ -277,6 +293,10 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .subject-swap {
+    animation: none !important;
+  }
+
   *,
   *::before,
   *::after {
