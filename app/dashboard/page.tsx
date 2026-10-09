@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  ArrowLeft,
   CalendarClock,
   ChevronRight,
   Clock3,
@@ -125,6 +126,11 @@ export default function Dashboard() {
 
   return (
     <div>
+      <Link href="/" className="mb-5 inline-flex items-center gap-2 rounded-lg text-sm font-semibold text-[#52616b] transition hover:text-[#17242c]">
+        <ArrowLeft size={17} />
+        Back to home
+      </Link>
+
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-semibold text-[#865a3a]">

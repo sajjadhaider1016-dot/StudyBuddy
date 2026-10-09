@@ -368,6 +368,10 @@ export async function extractContentFromFile(
     return { text: await extractDocxFile(file) };
   }
 
+  if (extension === ".pptx") {
+    return { text: await extractPptxFile(file) };
+  }
+
   if (extension === ".pdf") {
     return extractPdfFile(file, pageRange);
   }
@@ -394,6 +398,42 @@ function decodeXmlText(value: string): string {
     }
     return ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" } as Record<string, string>)[code.toLowerCase()] ?? entity;
   });
+}
+
+async function extractPptxFile(file: File): Promise<string> {
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const slidePaths = Object.keys(zip.files)
+    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
+    .sort((a, b) => {
+      const slideNumber = (path: string) => Number(path.match(/slide(\d+)\.xml$/i)?.[1] ?? 0);
+      return slideNumber(a) - slideNumber(b);
+    });
+
+  if (!slidePaths.length) {
+    throw new Error("This PowerPoint file has no readable slides.");
+  }
+
+  const slideTexts: string[] = [];
+  for (const [index, path] of slidePaths.entries()) {
+    const xml = await zip.file(path)?.async("text");
+    if (!xml) continue;
+
+    const paragraphs = [...xml.matchAll(/<a:p(?:\s[^>]*)?>([\s\S]*?)<\/a:p>/gi)]
+      .map((paragraph) => [...paragraph[1].matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/gi)]
+        .map((run) => decodeXmlText(run[1]))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim())
+      .filter(Boolean);
+
+    if (paragraphs.length) slideTexts.push(`Slide ${index + 1}\n${paragraphs.join("\n")}`);
+  }
+
+  if (!slideTexts.length) {
+    throw new Error("No readable text was found in this PowerPoint presentation.");
+  }
+
+  return slideTexts.join("\n\n");
 }
 
 async function extractEpubFile(file: File): Promise<string> {

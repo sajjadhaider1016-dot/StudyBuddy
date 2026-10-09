@@ -12,6 +12,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".pdf",
   ".docx",
   ".epub",
+  ".pptx",
   ".png",
   ".jpg",
   ".jpeg",
@@ -169,7 +170,7 @@ export async function POST(
           error:
             "UNSUPPORTED_FILE_TYPE",
           message:
-            "Unsupported file type. Use TXT, Markdown, PDF, EPUB, DOCX, PNG, JPG, JPEG, WEBP, or GIF.",
+            "Unsupported file type. Use TXT, Markdown, PDF, EPUB, DOCX, PPTX, PNG, JPG, JPEG, WEBP, or GIF.",
         },
         { status: 415 },
       );

@@ -21,7 +21,7 @@ import type { GeneratedCard } from "@/types";
 import { CardPreview } from "@/components/flashcards/card-preview";
 
 const ACCEPTED_FILES =
-  ".txt,.md,.pdf,.docx,.epub,.jpg,.jpeg,.png,.webp,.gif";
+  ".txt,.md,.pdf,.docx,.epub,.pptx,.jpg,.jpeg,.png,.webp,.gif";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_TOTAL_CARDS = 1000;
@@ -33,6 +33,7 @@ const supportedExtensions = [
   "pdf",
   "docx",
   "epub",
+  "pptx",
   "jpg",
   "jpeg",
   "png",
@@ -216,7 +217,7 @@ export default function CreatePage() {
       )
     ) {
       setError(
-        "Unsupported file type. Please use TXT, MD, PDF, EPUB, DOCX, JPG, JPEG, PNG, WEBP, or GIF.",
+        "Unsupported file type. Please use TXT, MD, PDF, EPUB, DOCX, PPTX, JPG, JPEG, PNG, WEBP, or GIF.",
       );
       return;
     }
@@ -767,7 +768,7 @@ export default function CreatePage() {
               />
 
               <p className="mt-2 text-xs muted">
-                PDF, EPUB, DOCX, TXT, MD,
+                PDF, EPUB, DOCX, PPTX, TXT, MD,
                 JPG, PNG, WEBP, GIF ·
                 max 100 MB
               </p>
