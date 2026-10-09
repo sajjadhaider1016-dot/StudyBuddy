@@ -14,24 +14,6 @@ const FALLBACK_MODEL =
 
 const MAX_CARDS_PER_REQUEST = 25;
 
-function splitSourceForBatches(source: string, batchCount: number): string[] {
-  if (batchCount <= 1) return [source];
-  const parts: string[] = [];
-  let start = 0;
-  for (let index = 0; index < batchCount; index += 1) {
-    const remainingParts = batchCount - index;
-    const target = index === batchCount - 1
-      ? source.length
-      : start + Math.ceil((source.length - start) / remainingParts);
-    let cut = index === batchCount - 1 ? source.length : source.lastIndexOf("\n", target);
-    if (cut <= start || cut < start + Math.floor((target - start) * 0.65)) cut = target;
-    const part = source.slice(start, cut).trim();
-    if (part) parts.push(part);
-    start = cut;
-  }
-  return parts;
-}
-
 export class GeminiTemporaryError extends Error {
   constructor(message: string) {
     super(message);
@@ -92,6 +74,7 @@ function buildPrompt(
   content: string,
   deckTitle: string,
   numberOfCards: number,
+  previousQuestions: string[] = [],
 ): string {
   return `
 You are StudyBuddy's expert educational flashcard generator.
@@ -230,6 +213,8 @@ Prefer questions about:
 
 Do NOT create cards merely by turning every sentence into a question.
 
+${previousQuestions.length ? `QUESTIONS ALREADY GENERATED FOR THIS DECK (do not repeat or paraphrase):\n${previousQuestions.map((question) => `- ${question}`).join("\n")}` : ""}
+
 ==================================================
 ANSWER QUALITY
 ==================================================
@@ -335,9 +320,10 @@ export async function generateFlashcards(
     model: string,
     source: string,
     requestedCards: number,
+    previousQuestions: string[],
   ): Promise<GeneratedCard[]> {
     try {
-      const prompt = buildPrompt(source, deckTitle, requestedCards);
+      const prompt = buildPrompt(source, deckTitle, requestedCards, previousQuestions);
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
@@ -400,20 +386,20 @@ export async function generateFlashcards(
   }
 
   const batchCount = Math.ceil(numberOfCards / MAX_CARDS_PER_REQUEST);
-  const sourceParts = splitSourceForBatches(content, batchCount);
   const allCards: GeneratedCard[] = [];
   let remainingCards = numberOfCards;
 
-  for (const sourcePart of sourceParts) {
+  for (let batch = 0; batch < batchCount; batch += 1) {
     const requestedCards = Math.min(MAX_CARDS_PER_REQUEST, remainingCards);
+    const previousQuestions = allCards.map((card) => card.question);
     try {
-      allCards.push(...await callModel(PRIMARY_MODEL, sourcePart, requestedCards));
+      allCards.push(...await callModel(PRIMARY_MODEL, content, requestedCards, previousQuestions));
     } catch (primaryError) {
       if (isQuotaError(primaryError)) throw primaryError;
       if (process.env.NODE_ENV !== "production") {
         console.warn(`Primary Gemini model failed. Trying fallback model ${FALLBACK_MODEL}.`, getErrorMessage(primaryError));
       }
-      allCards.push(...await callModel(FALLBACK_MODEL, sourcePart, requestedCards));
+      allCards.push(...await callModel(FALLBACK_MODEL, content, requestedCards, previousQuestions));
     }
     remainingCards -= requestedCards;
   }

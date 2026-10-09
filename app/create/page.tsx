@@ -72,11 +72,13 @@ type GenerationResponse = {
   message?: string;
 };
 
-type CatalogBook = { id: number; title: string; authors: string[] };
+type CatalogBook = { id: number | string; title: string; authors: string[] };
 type BookSection = { title: string; content: string };
 
 function splitBookIntoSections(text: string): BookSection[] {
-  const maxLength = 80_000;
+  // Keep ordinary documents together; only split very long book text to stay
+  // within the 100k-character generation request limit.
+  const maxLength = 95_000;
   const sections: BookSection[] = [];
   let remaining = text;
   while (remaining.length > 0) {
@@ -357,11 +359,12 @@ export default function CreatePage() {
     setBookCatalogNotice("");
     try {
       const response = await fetch(`/api/books/search?q=${encodeURIComponent(bookQuery.trim())}`);
-      const data = await response.json() as { books?: CatalogBook[]; error?: string; catalogFallback?: boolean };
+      const data = await response.json() as { books?: CatalogBook[]; error?: string; catalogFallback?: boolean; builtInFallback?: boolean };
       if (!response.ok) throw new Error(data.error || "Book search failed.");
       setBookResults(data.books ?? []);
-      if (data.catalogFallback) setBookCatalogNotice("The live catalog is unavailable. These built-in free classics can still be searched and loaded.");
-      if (!data.books?.length) setBookCatalogNotice("No matching built-in books were found. You can still upload a PDF or EPUB below.");
+      if (data.catalogFallback && data.builtInFallback) setBookCatalogNotice("Both live catalogs are unavailable. Showing matching built-in classics where possible.");
+      else if (data.catalogFallback) setBookCatalogNotice("Showing full-text results from Open Library.");
+      if (!data.books?.length) setBookCatalogNotice("No downloadable match found. You can still upload a PDF or EPUB below.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Book search failed.");
     } finally {
@@ -379,7 +382,7 @@ export default function CreatePage() {
       const sections = splitBookIntoSections(data.content);
       if (!sections.length) throw new Error("No readable text was found in this book.");
       setTitle(data.title || book.title);
-      setBookSections(sections);
+      setBookSections(sections.length > 1 ? sections : []);
       setSelectedBookSection(0);
       setContent(sections[0].content);
       setFileName(`${data.title || book.title}${data.authors?.length ? ` — ${data.authors.join(", ")}` : ""}`);
@@ -558,7 +561,7 @@ export default function CreatePage() {
           <BookOpen className="mt-1 shrink-0 text-[#9b713e]" size={20} />
           <div className="min-w-0 flex-1">
             <h2 id="book-search-title" className="font-semibold">Find a free public-domain book</h2>
-            <p className="mt-1 text-sm muted">Search Project Gutenberg’s catalog. Availability may vary by country.</p>
+            <p className="mt-1 text-sm muted">Search full-text public-domain books from Project Gutenberg and Open Library.</p>
             <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void searchCatalog(); }}>
               <input value={bookQuery} onChange={(event) => setBookQuery(event.target.value)} placeholder="Search by title or author" className="min-w-0 flex-1 rounded-xl border bg-transparent px-4 py-2.5" style={{ borderColor: "var(--line)" }} aria-label="Search public-domain books" />
               <button type="submit" disabled={searchingBooks || bookQuery.trim().length < 2} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#202a35] px-4 py-2.5 font-semibold text-white disabled:opacity-50">
