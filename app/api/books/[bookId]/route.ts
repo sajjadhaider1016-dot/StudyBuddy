@@ -55,10 +55,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ boo
     // The direct Gutenberg URLs below keep the built-in list usable without Gutendex.
   }
 
-  const candidateUrls = textUrl ? [textUrl] : fallback
-    ? [`https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`, `https://www.gutenberg.org/files/${bookId}/${bookId}-0.txt`, `https://www.gutenberg.org/files/${bookId}/${bookId}.txt`]
-    : [];
-  if (!candidateUrls.length) return Response.json({ error: "This book could not be found in the public catalog." }, { status: 404 });
+  // Gutendex metadata can fail intermittently even when the Gutenberg text
+  // file is available. Try the standard public text paths for every valid ID,
+  // not only IDs in the small built-in fallback list.
+  const directTextUrls = [
+    `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`,
+    `https://www.gutenberg.org/files/${bookId}/${bookId}-0.txt`,
+    `https://www.gutenberg.org/files/${bookId}/${bookId}.txt`,
+  ];
+  const candidateUrls = [...new Set([...(textUrl ? [textUrl] : []), ...directTextUrls])];
 
   for (const candidate of candidateUrls) {
     try {

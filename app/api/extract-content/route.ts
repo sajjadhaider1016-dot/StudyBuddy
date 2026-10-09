@@ -233,8 +233,8 @@ export async function POST(
       if (extension !== ".pdf" || !Number.isInteger(startPage) || !Number.isInteger(endPage) || startPage < 1 || endPage < startPage) {
         return Response.json({ error: "INVALID_PAGE_RANGE", message: "Enter a valid PDF page range." }, { status: 400 });
       }
-      if (endPage - startPage + 1 > 100) {
-        return Response.json({ error: "PAGE_RANGE_TOO_LARGE", message: "Choose up to 100 pages at a time." }, { status: 413 });
+      if (endPage - startPage + 1 > 500) {
+        return Response.json({ error: "PAGE_RANGE_TOO_LARGE", message: "Choose up to 500 pages at a time." }, { status: 413 });
       }
       pageRange = { startPage, endPage };
     }

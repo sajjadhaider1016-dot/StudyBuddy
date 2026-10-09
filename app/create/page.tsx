@@ -24,6 +24,8 @@ const ACCEPTED_FILES =
   ".txt,.md,.pdf,.docx,.epub,.jpg,.jpeg,.png,.webp,.gif";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_TOTAL_CARDS = 1000;
+const MAX_CARDS_PER_REQUEST = 40;
 
 const supportedExtensions = [
   "txt",
@@ -76,22 +78,75 @@ type CatalogBook = { id: number | string; title: string; authors: string[] };
 type BookSection = { title: string; content: string };
 
 function splitBookIntoSections(text: string): BookSection[] {
-  // Keep ordinary documents together; only split very long book text to stay
-  // within the 100k-character generation request limit.
   const maxLength = 95_000;
+  const headingPattern = /^\s*((?:chapter|part|unit|lesson|module)\s+(?:\d+[a-z]?|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[^\r\n]*)\s*$/gim;
+  const headings = [...text.matchAll(headingPattern)].map((match) => ({ title: match[1].trim(), start: match.index ?? 0 }));
   const sections: BookSection[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLength) {
-      sections.push({ title: `Section ${sections.length + 1}`, content: remaining.trim() });
-      break;
-    }
-    let cut = remaining.lastIndexOf("\n", maxLength);
-    if (cut < maxLength * 0.6) cut = maxLength;
-    sections.push({ title: `Section ${sections.length + 1}`, content: remaining.slice(0, cut).trim() });
-    remaining = remaining.slice(cut).trimStart();
+
+  if (headings.length > 1) {
+    if (text.slice(0, headings[0].start).trim()) sections.push({ title: "Introduction", content: text.slice(0, headings[0].start).trim() });
+    headings.forEach((heading, index) => {
+      const chapterText = text.slice(heading.start, headings[index + 1]?.start ?? text.length).trim();
+      if (chapterText) sections.push(...splitLongSection(heading.title, chapterText, maxLength));
+    });
+  } else if (text.length > maxLength) {
+    sections.push(...splitLongSection("Whole document", text, maxLength));
+  } else {
+    return [{ title: "Whole document", content: text.trim() }];
   }
   return sections.filter((section) => section.content.length >= 20);
+}
+
+function splitLongSection(title: string, text: string, maxLength: number): BookSection[] {
+  const sections: BookSection[] = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(start + maxLength, text.length);
+    if (end < text.length) {
+      const paragraphBreak = text.lastIndexOf("\n", end);
+      if (paragraphBreak > start + maxLength * 0.6) end = paragraphBreak;
+    }
+    const content = text.slice(start, end).trim();
+    if (content) sections.push({ title: sections.length ? `${title} (continued ${sections.length + 1})` : title, content });
+    start = end;
+    while (text[start] === "\n") start += 1;
+  }
+  return sections;
+}
+
+function groupSectionsForRequests(sections: BookSection[], maxLength = 90_000): BookSection[] {
+  const groups: BookSection[] = [];
+  let currentTitle = "";
+  let currentContent = "";
+  for (const section of sections) {
+    const part = `## ${section.title}\n\n${section.content}`;
+    if (currentContent && currentContent.length + part.length + 2 > maxLength) {
+      groups.push({ title: currentTitle, content: currentContent });
+      currentTitle = "";
+      currentContent = "";
+    }
+    currentTitle = currentTitle ? `${currentTitle}, ${section.title}` : section.title;
+    currentContent = currentContent ? `${currentContent}\n\n${part}` : part;
+  }
+  if (currentContent) groups.push({ title: currentTitle, content: currentContent });
+  return groups;
+}
+
+function allocateCards(sections: BookSection[], totalCards: number): number[] {
+  const totalLength = sections.reduce((sum, section) => sum + section.content.length, 0);
+  if (!sections.length || !totalLength) return [];
+  if (totalCards < sections.length) {
+    const selected = new Set(sections.map((section, index) => ({ index, length: section.content.length }))
+      .sort((a, b) => b.length - a.length).slice(0, totalCards).map((section) => section.index));
+    return sections.map((_, index) => selected.has(index) ? 1 : 0);
+  }
+  const remainingAfterCoverage = totalCards - sections.length;
+  const exact = sections.map((section) => remainingAfterCoverage * section.content.length / totalLength);
+  const counts = exact.map((value) => 1 + Math.floor(value));
+  const remaining = totalCards - counts.reduce((sum, count) => sum + count, 0);
+  const order = exact.map((value, index) => ({ index, remainder: value - Math.floor(value) })).sort((a, b) => b.remainder - a.remainder);
+  for (let index = 0; index < remaining; index += 1) counts[order[index % order.length].index] += 1;
+  return counts;
 }
 
 export default function CreatePage() {
@@ -117,6 +172,7 @@ export default function CreatePage() {
     useState(false);
   const [generating, setGenerating] =
     useState(false);
+  const [generationProgress, setGenerationProgress] = useState("");
 
   const [error, setError] =
     useState("");
@@ -274,7 +330,7 @@ export default function CreatePage() {
       const sections = splitBookIntoSections(extractedContent);
       if (sections.length > 1) {
         setBookSections(sections);
-        setSelectedBookSection(0);
+        setSelectedBookSection(-1);
         setContent(sections[0].content);
       } else {
         setBookSections([]);
@@ -315,8 +371,8 @@ export default function CreatePage() {
       setError(`Choose a page range between 1 and ${pdfPageCount}.`);
       return;
     }
-    if (pdfEndPage - pdfStartPage + 1 > 100) {
-      setError("Choose up to 100 pages at a time.");
+    if (pdfEndPage - pdfStartPage + 1 > 500) {
+      setError("Choose up to 500 pages at a time.");
       return;
     }
 
@@ -335,7 +391,7 @@ export default function CreatePage() {
       if (extractedContent.length < 20) throw new Error("No readable text was found on those pages.");
       const sections = splitBookIntoSections(extractedContent);
       setBookSections(sections.length > 1 ? sections : []);
-      setSelectedBookSection(0);
+      setSelectedBookSection(sections.length > 1 ? -1 : 0);
       setContent(sections.length > 1 ? sections[0].content : extractedContent);
       setFileName(`${file.name} · pages ${pdfStartPage}–${pdfEndPage}`);
       setFileType("pdf");
@@ -383,7 +439,7 @@ export default function CreatePage() {
       if (!sections.length) throw new Error("No readable text was found in this book.");
       setTitle(data.title || book.title);
       setBookSections(sections.length > 1 ? sections : []);
-      setSelectedBookSection(0);
+      setSelectedBookSection(sections.length > 1 ? -1 : 0);
       setContent(sections[0].content);
       setFileName(`${data.title || book.title}${data.authors?.length ? ` — ${data.authors.join(", ")}` : ""}`);
       setFileType("book");
@@ -414,6 +470,8 @@ export default function CreatePage() {
     setContent("");
     setError("");
     setNotice("");
+    setBookSections([]);
+    setSelectedBookSection(0);
     setPdfPageCount(null);
     pdfFileRef.current = null;
   }
@@ -447,65 +505,56 @@ export default function CreatePage() {
         numberOfCards,
       ) ||
       numberOfCards < 1 ||
-      numberOfCards > 200
+      numberOfCards > MAX_TOTAL_CARDS
     ) {
-      setError(
-        "Choose between 1 and 200 flashcards.",
-      );
+      setError(`Choose between 1 and ${MAX_TOTAL_CARDS} flashcards.`);
+      return;
+    }
+
+    const selectedSections = bookSections.length
+      ? selectedBookSection === -1
+        ? bookSections
+        : [bookSections[selectedBookSection]].filter((section): section is BookSection => Boolean(section))
+      : [{ title, content }];
+    const sections = groupSectionsForRequests(selectedSections);
+    if (numberOfCards < sections.length) {
+      setError(`The selected material needs at least ${sections.length} cards to cover all request-sized sections.`);
       return;
     }
 
     setGenerating(true);
+    setGenerationProgress("Preparing your study material…");
 
     try {
-      const response =
-        await fetch(
-          "/api/generate-flashcards",
-          {
+      const sectionCounts = allocateCards(sections, numberOfCards);
+      const generatedCards: GeneratedCard[] = [];
+
+      for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+        const section = sections[sectionIndex];
+        let remaining = sectionCounts[sectionIndex];
+        while (remaining > 0) {
+          const batchSize = Math.min(MAX_CARDS_PER_REQUEST, remaining);
+          setGenerationProgress(`Creating ${section.title} · ${generatedCards.length} of ${numberOfCards} cards ready`);
+          const response = await fetch("/api/generate-flashcards", {
             method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              content,
+              content: section.content,
               deckTitle: title,
-              numberOfCards,
+              numberOfCards: batchSize,
+              previousQuestions: generatedCards.slice(-100).map((card) => card.question),
             }),
-          },
-        );
-
-      let data: GenerationResponse;
-
-      try {
-        data =
-          (await response.json()) as GenerationResponse;
-      } catch {
-        throw new Error(
-          "The server returned an invalid response while generating flashcards.",
-        );
+          });
+          const data = await response.json() as GenerationResponse;
+          if (!response.ok) throw new Error(data.message || data.error || "Flashcard generation failed.");
+          if (!data.flashcards?.length) throw new Error("No flashcards were generated. Try again.");
+          generatedCards.push(...data.flashcards);
+          remaining -= batchSize;
+        }
       }
 
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            data.error ||
-            "Flashcard generation failed.",
-        );
-      }
-
-      if (
-        !data.flashcards ||
-        data.flashcards.length === 0
-      ) {
-        throw new Error(
-          "No flashcards were generated. Try adding more detailed study material.",
-        );
-      }
-
-      setCards(
-        data.flashcards,
-      );
+      setContent(sections.map((section) => section.content).join("\n\n"));
+      setCards(generatedCards);
     } catch (error) {
       setError(
         error instanceof Error
@@ -514,6 +563,7 @@ export default function CreatePage() {
       );
     } finally {
       setGenerating(false);
+      setGenerationProgress("");
     }
   }
 
@@ -623,7 +673,7 @@ export default function CreatePage() {
                     "var(--line)",
                 }}
               >
-                {[10, 20, 30, 40, 50, 75, 100, 150, 200].map(
+                {[10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000].map(
                   (number) => (
                     <option
                       key={number}
@@ -644,7 +694,7 @@ export default function CreatePage() {
                 <input
                   type="number"
                   min="1"
-                  max="200"
+                  max={MAX_TOTAL_CARDS}
                   value={
                     customCount
                   }
@@ -664,7 +714,7 @@ export default function CreatePage() {
                   aria-label="Custom number of cards"
                 />
               )}
-              <p className="mt-2 text-xs muted">Up to 200 cards. Larger requests are generated in smaller batches and use more Gemini quota.</p>
+              <p className="mt-2 text-xs muted">Up to {MAX_TOTAL_CARDS.toLocaleString()} cards per deck, in batches of up to 40 to reduce repeated book requests. Gemini free limits still apply.</p>
             </label>
 
             <div>
@@ -776,7 +826,7 @@ export default function CreatePage() {
           {pdfPageCount !== null && (
             <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: "var(--line)" }}>
               <h3 className="font-semibold">Choose a chapter or page range</h3>
-              <p className="mt-1 text-sm muted">This book has {pdfPageCount} pages. Extract up to 100 pages per deck; you can repeat this for other chapters.</p>
+              <p className="mt-1 text-sm muted">This book has {pdfPageCount} pages. Select up to 500 pages per deck, or choose a single chapter.</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <label className="text-sm font-medium">
                   First page
@@ -800,11 +850,12 @@ export default function CreatePage() {
               <select value={selectedBookSection} onChange={(event) => {
                 const index = Number(event.target.value);
                 setSelectedBookSection(index);
-                setContent(bookSections[index]?.content ?? "");
+                if (index >= 0) setContent(bookSections[index]?.content ?? "");
               }} className="w-full rounded-xl border bg-transparent px-4 py-3" style={{ borderColor: "var(--line)" }}>
+                <option value={-1}>Entire book · all {bookSections.length} sections</option>
                 {bookSections.map((section, index) => <option key={index} value={index}>{section.title}</option>)}
               </select>
-              <span className="mt-1 block text-xs muted">Large books are divided into sections so you can make focused decks from each part.</span>
+              <span className="mt-1 block text-xs muted">Choose the whole book to include all detected chapters and exercises, or select one section.</span>
             </label>
           )}
 
@@ -821,6 +872,8 @@ export default function CreatePage() {
                   event.target.value,
                 );
 
+                setBookSections([]);
+                setSelectedBookSection(0);
                 if (fileName) {
                   setFileName(
                     "",
@@ -832,6 +885,7 @@ export default function CreatePage() {
               }}
               rows={17}
               maxLength={100000}
+              disabled={bookSections.length > 1 && selectedBookSection === -1}
               placeholder="Paste lecture notes, textbook material, revision notes, article text, or extracted content here…"
               className="w-full resize-y rounded-xl border bg-transparent px-4 py-3 leading-6 outline-none focus:border-[#9b713e]"
               style={{
@@ -846,8 +900,9 @@ export default function CreatePage() {
               </span>
 
               <span>
-                {content.length.toLocaleString()}{" "}
-                / 100,000
+                {bookSections.length > 1 && selectedBookSection === -1
+                  ? `${bookSections.reduce((sum, section) => sum + section.content.length, 0).toLocaleString()} characters across all sections`
+                  : `${content.length.toLocaleString()} / 100,000`}
               </span>
             </div>
           </label>
@@ -885,7 +940,7 @@ export default function CreatePage() {
                   size={18}
                   className="animate-spin"
                 />
-                Creating your flashcards…
+                {generationProgress || "Creating your flashcards…"}
               </>
             ) : (
               <>
@@ -899,9 +954,7 @@ export default function CreatePage() {
 
           {generating && (
             <p className="text-center text-sm muted">
-              StudyBuddy is analyzing your
-              material and creating useful
-              recall questions…
+              {generationProgress || "StudyBuddy is analyzing your material and creating recall questions…"}
             </p>
           )}
         </div>

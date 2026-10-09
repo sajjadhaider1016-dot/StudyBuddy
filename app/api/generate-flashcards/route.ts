@@ -45,12 +45,14 @@ export async function POST(request: Request) {
       content,
       deckTitle,
       numberOfCards,
+      previousQuestions,
     } = validation.data;
 
     const flashcards = await generateFlashcards(
       content,
       deckTitle,
       numberOfCards,
+      previousQuestions,
     );
 
     return Response.json(
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "The number of cards must be between 1 and 200.",
+            "A generation request can contain between 1 and 40 cards.",
           retryable: false,
         },
         {
@@ -145,21 +147,25 @@ export async function POST(request: Request) {
     }
 
     if (
-      lower.includes("429") ||
-      lower.includes("quota") ||
-      lower.includes("resource_exhausted") ||
-      lower.includes("free_tier_requests") ||
+      lower.includes("generate_content_free_tier_requests") ||
+      lower.includes("generaterequestsperday") ||
       lower.includes("daily quota")
     ) {
       return Response.json(
         {
-          error:
-            "The Gemini API quota has been reached. Please try again later or use a Gemini API tier with additional quota.",
+          error: "Aaj ki Gemini free limit khatam ho gayi. Google ke mutabiq project quota reset hone tak intezar karein. Nayi API key se isi project ki limit reset nahi hoti.",
           retryable: false,
         },
         {
           status: 429,
         },
+      );
+    }
+
+    if (lower.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
+      return Response.json(
+        { error: "Gemini ki short-term rate limit lagi hai. App ne automatically wait karke retry kiya; thori dair baad dobara try karein.", retryable: true },
+        { status: 429 },
       );
     }
 
