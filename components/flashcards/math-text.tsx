@@ -38,7 +38,17 @@ function renderMath(
 }
 
 function renderTextWithMath(text: string) {
-  const parts = text.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g);
+  // Some model responses contain LaTeX backslashes that JSON.parse interprets
+  // as control escapes (for example, \frac becomes form-feed + "rac"). Restore
+  // the common commands so older saved cards remain readable too.
+  const readableText = text
+    .replace(/\f(?=rac\b)/g, "\\f")
+    .replace(/\u0008(?=(?:ig|egin|old|inom|iggl)\b)/g, "\\b")
+    .replace(/\t(?=(?:ext|an|imes|heta|au|o|ilde|riangle)\b)/g, "\\t")
+    .replace(/\n(?=(?:eq|u|ot|abla|abla|exists|infty|subset|times|rightarrow|leftarrow)\b)/g, "\\n")
+    .replace(/\r(?=(?:angle|ho|ef|ight|ho|m)\b)/g, "\\r");
+
+  const parts = readableText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g);
 
   return parts.map((part, index) => {
     if (!part) {

@@ -9,9 +9,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
+import MathText from "@/components/flashcards/math-text";
 
 import { createDeck } from "@/lib/flashcards";
 import { saveDeck } from "@/lib/storage";
@@ -28,25 +26,6 @@ interface CardPreviewProps {
   cards?: GeneratedCard[];
   onBack: () => void;
   onSaved: (id: string) => void;
-}
-
-function MathText({
-  children,
-  className = "",
-}: {
-  children: string;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
-  );
 }
 
 export function CardPreview({
@@ -341,9 +320,7 @@ export function CardPreview({
                         Question
                       </p>
 
-                      <MathText className="prose prose-slate max-w-none text-lg font-bold leading-7 text-[var(--foreground)] sm:text-xl dark:prose-invert">
-                        {card.question}
-                      </MathText>
+                      <MathText text={card.question} className="prose prose-slate max-w-none text-lg font-bold leading-7 text-[var(--foreground)] sm:text-xl dark:prose-invert" />
                     </div>
 
                     {/* Answer */}
@@ -352,9 +329,7 @@ export function CardPreview({
                         Answer
                       </p>
 
-                      <MathText className="prose prose-slate max-w-none text-sm leading-7 text-[var(--foreground)] dark:prose-invert">
-                        {card.answer}
-                      </MathText>
+                      <MathText text={card.answer} className="prose prose-slate max-w-none text-sm leading-7 text-[var(--foreground)] dark:prose-invert" />
                     </div>
                   </>
                 )}
